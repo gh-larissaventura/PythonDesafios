@@ -1,87 +1,91 @@
 import math
 
-print("--- LogiPallet: Otimizador de Cargas ---")
+print("--- LogiPallet V2.0: Volume & Peso ---")
 
 
 def obter_dados_logistica():
     """
-    Coleta e valida inputs. Garante que não haja números negativos ou zero na capacidade.
+    Coleta: Total de caixas, Capacidade (qtd), Peso da Caixa, Peso Máx Palete.
     """
     while True:
         try:
-            caixas_input = input("Digite o total de caixas produzidas: ").strip()
-            total_caixas = int(caixas_input)
+            print("\n📊 Dados da Carga:")
+            total_caixas = int(input("Total de caixas produzidas: ").strip())
 
-            if total_caixas < 0:
-                print("❌ Erro: O número de caixas não pode ser negativo.")
+            print("\n📏 Restrições do Palete:")
+            cap_volume = int(input("Quantas caixas cabem fisicamente (espaço)? ").strip())
+
+            peso_caixa = float(input("Qual o peso de UMA caixa (kg)? ").strip().replace(",", "."))
+            peso_max_palete = float(input("Qual o peso MÁXIMO que o palete aguenta (kg)? ").strip().replace(",", "."))
+
+            # Validação básica
+            if total_caixas < 0 or cap_volume <= 0 or peso_caixa <= 0 or peso_max_palete <= 0:
+                print("❌ Erro: Valores devem ser positivos e maiores que zero.")
                 continue
 
-            cap_input = input("Digite a capacidade de cada palete: ").strip()
-            capacidade = int(cap_input)
-
-            if capacidade <= 0:
-                print("❌ Erro: A capacidade do palete deve ser maior que zero.")
-                continue
-
-            # Se chegou aqui, tudo está certo
-            return total_caixas, capacidade
+            return total_caixas, cap_volume, peso_caixa, peso_max_palete
 
         except ValueError:
-            print("❌ Erro: Digite apenas números inteiros.")
+            print("❌ Erro: Digite apenas números válidos.")
 
 
-def calcular_paletes(total, capacidade):
+def calcular_cenario(total_caixas, cap_volume, peso_caixa, peso_max_palete):
     """
-    Retorna:
-    1. Total de paletes necessários (int)
-    2. Quantidade de paletes totalmente cheios (int)
-    3. Quantas caixas ficam no último palete (int)
+    Define o gargalo (limite real) e calcula os paletes.
     """
-    # math.ceil arredonda para cima (ex: 7.1 -> 8)
-    paletes_totais = math.ceil(total / capacidade)
+    # 1. Descobrir quantas caixas cabem pelo limite de PESO
+    # Ex: Palete aguenta 1000kg / caixa de 10kg = 100 caixas
+    cap_peso = int(peso_max_palete // peso_caixa)
 
-    # // faz a divisão inteira (ex: 150 // 20 = 7)
-    paletes_cheios = total // capacidade
+    # 2. O limite real é o MENOR número entre o espaço e o peso
+    # A função min() faz isso automaticamente pra gente
+    capacidade_real = min(cap_volume, cap_peso)
 
-    # % pega o resto da divisão (ex: 150 % 20 = 10 caixas sobrando)
-    resto_caixas = total % capacidade
-
-    # Ajuste lógico: Se não sobra nada, o último palete também é cheio
-    if resto_caixas == 0 and total > 0:
-        paletes_cheios = paletes_totais
-        caixas_ultimo = capacidade  # O último está cheio
+    # 3. Identificar qual foi o motivo da limitação (para o relatório)
+    if cap_peso < cap_volume:
+        motivo_limitacao = "PESO (Palete quebraria)"
     else:
-        caixas_ultimo = resto_caixas
+        motivo_limitacao = "VOLUME (Falta de espaço)"
 
-    return paletes_totais, paletes_cheios, caixas_ultimo
+    # 4. Cálculos finais com a capacidade real
+    paletes_totais = math.ceil(total_caixas / capacidade_real)
+    paletes_cheios = total_caixas // capacidade_real
+    caixas_ultimo = total_caixas % capacidade_real
+
+    if caixas_ultimo == 0 and total_caixas > 0:
+        caixas_ultimo = capacidade_real
+        paletes_cheios = paletes_totais
+
+    return paletes_totais, capacidade_real, motivo_limitacao, caixas_ultimo
 
 
 def main():
     while True:
-        print("\n🏗️  Nova Simulação de Carga...")
+        try:
+            # 1. Entrada
+            total, cap_vol, peso_cx, peso_max = obter_dados_logistica()
 
-        # 1. Entrada
-        total_caixas, capacidade = obter_dados_logistica()
+            # 2. Processamento
+            qtd_paletes, cap_real, motivo, ultimo = calcular_cenario(total, cap_vol, peso_cx, peso_max)
 
-        # 2. Processamento
-        total_nec, cheios, ultimo_qtd = calcular_paletes(total_caixas, capacidade)
+            # 3. Saída Rica
+            print("\n" + "=" * 40)
+            print(f"🚛 RELATÓRIO DE OTIMIZAÇÃO")
+            print("=" * 40)
+            print(f"Limitação Definida por: {motivo}")
+            print(f"Capacidade Real por Palete: {cap_real} caixas")
+            print("-" * 40)
+            print(f"✅ TOTAL DE PALETES: {qtd_paletes}")
 
-        # 3. Saída (Relatório Rico)
-        print("-" * 30)
-        print(f"📦 Total de Caixas: {total_caixas}")
-        print(f"📏 Capacidade por Palete: {capacidade}")
-        print("-" * 30)
-        print(f"✅ PALETES NECESSÁRIOS: {total_nec}")
-        print(f"   ├─ Paletes Completos: {cheios}")
-        if total_nec > cheios:
-            print(f"   └─ Palete Incompleto: 1 (com {ultimo_qtd} caixas)")
-        print("-" * 30)
+            # Cálculo do peso total de um palete cheio (apenas informativo)
+            peso_palete_cheio = cap_real * peso_cx
+            print(f"⚖️  Peso por Palete Cheio: {peso_palete_cheio:.2f} kg")
+            print("=" * 40)
 
-        # 4. Loop
-        continuar = input("\nCalcular outra carga? (S/N): ").upper()
-        if continuar != 'S':
-            print("\nEncerrando LogiPallet... Bom trabalho! 🚛")
-            break
+            if input("\nNova simulação? (S/N): ").upper() != 'S':
+                break
+        except Exception as e:
+            print(f"Erro inesperado: {e}")
 
 
 if __name__ == "__main__":
